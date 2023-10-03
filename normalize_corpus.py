@@ -36,6 +36,8 @@ def normalize_audio(src_dir:str, dst_dir:str, target_loudness:int):
                     # Calculate the gain required to reach the target LUFS level
                     gain = target_lufs - loudness
                     audio = audio + gain  # Apply the gain to normalize
+                else: 
+                    print(f"WARNING ! Fould a strange loudness figure ({loudness}) or current loudness == target.")
 
                 # Export the normalized audio to the target directory
                 audio.export(dst_file_path, format="wav")

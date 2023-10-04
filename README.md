@@ -15,4 +15,4 @@ Once Python is installed on your system, simply run the following from root of t
 `pip install -r requirements.txt`
 
 ## Disclamer 
-Generative AI was used as a helper in order in the development process to make these tools.
+Generative AI models (such as LLMs) was used as a helper in order in the development process to make these tools.

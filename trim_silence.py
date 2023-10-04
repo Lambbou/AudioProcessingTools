@@ -3,6 +3,19 @@ import click
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
 
+class NegativeNumberParamType(click.ParamType):
+    name = 'negative_numbers_only'
+
+    def convert(self, value, param, ctx):
+        try:
+            number = float(value)
+            if number < 0:
+                return number
+            else:
+                self.fail(f'{value} is not a negative number. Values passed in dB LUFS cannot be positive.', param, ctx)
+        except ValueError:
+            self.fail(f'{value} is not a valid number. Values passed in dB LUFS should be, well... numerical values.', param, ctx)
+
 def trim_audio_file(input_wav:str, output_wav:str):
     audio = AudioSegment.from_wav(input_wav)
 
@@ -13,6 +26,8 @@ def trim_audio_file(input_wav:str, output_wav:str):
     trimmed_audio = AudioSegment.empty()
     for segment in audio_segments:
         trimmed_audio += segment
+
+    trimmed_audio = AudioSegment.silent(duration=150) + trimmed_audio + AudioSegment.silent(duration=150)
 
     trimmed_audio.export(output_wav, format="wav")
     
@@ -48,6 +63,7 @@ def trim_and_replicate(src_dir, dst_dir):
 @click.command()
 @click.argument('src_directory', type=click.Path(exists=True))
 @click.argument('dst_directory', type=click.Path())
+@click.option('--db', type=NegativeNumberParamType(), default=-40, help='The desired loudness in dB LUFS (Loudness Units Full Scale).')
 def trim_and_replicate_structure(src_directory, dst_directory):
     trim_and_replicate(src_directory, dst_directory)
 

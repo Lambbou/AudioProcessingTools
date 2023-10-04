@@ -1,2 +1,5 @@
 click
 pydub
+tqdm
+soundfile
+librosa

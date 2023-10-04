@@ -3,19 +3,6 @@ import click
 import librosa
 import soundfile as sf
 
-class NegativeNumberParamType(click.ParamType):
-    name = 'negative_numbers_only'
-
-    def convert(self, value, param, ctx):
-        try:
-            number = float(value)
-            if number < 0:
-                return number
-            else:
-                self.fail(f'{value} is not a negative number. Values passed in dB LUFS cannot be positive.', param, ctx)
-        except ValueError:
-            self.fail(f'{value} is not a valid number. Values passed in dB LUFS should be, well... numerical values.', param, ctx)
-
 def resample_audio(src_dir:str, dst_dir:str, target_sr:int):
     try:
         # Recursively create the same directory structure in the target directory

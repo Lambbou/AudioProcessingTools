@@ -10,13 +10,14 @@ AudioProcessingTools is a collection of tools to prepare a dataset for machine l
 
 You need to install the following packages in order to use the toolkit.
 
+* python3 (tested with python 3.10 but should work for all versions above 3.6)
 * ffmpeg
 * espeak
 * festival
 
 On Debian/Ubuntu/Mint, you can do so using the following command:
 
-`sudo apt install ffmpeg festival espeak-ng mbrola`
+`sudo apt install python3 ffmpeg festival espeak-ng mbrola`
 
 #### Other OS
 

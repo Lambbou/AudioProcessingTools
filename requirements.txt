@@ -4,3 +4,5 @@ tqdm
 soundfile
 librosa
 phonemizer
+wvmos @ git+https://github.com/AndreevP/wvmos
+moviepy

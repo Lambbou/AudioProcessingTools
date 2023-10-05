@@ -16,10 +16,10 @@ def get_lang_code(text:str) -> str:
 @click.argument('input_csv_file', type=click.File('r'))
 @click.argument('output_csv_file', type=click.File('w'))
 @click.option('-l', '--lang', type=click.STRING, default='', help='Use this option to force the language if you don\'t have a language row in your csv.')
-@click.option('--basename-row', type=click.STRING, default="Basename", help='The name (in the header) of the row corresponding the the path to the wav file.') # "clips_with_full_path"
-@click.option('--transcript-row', type=click.STRING, default="Basename", help='The desired sampling rate.') # ""
-@click.option('-s','--separator', type=click.STRING, default="\t", help='The desired sampling rate.') # "|"
-@click.option('-q', '--quotechar', type=click.STRING, default='|', help='The desired sampling rate.') # '"'
+@click.option('-b', '--basename-row', type=click.STRING, default="Basename", help='The name (in the header) of the row corresponding to the path to the wav file.') # "clips_with_full_path"
+@click.option('-t', '--transcript-row', type=click.STRING, default="Transcript", help='The name (in the header) of the row corresponding to the text transcript of the wav file speech content.') # ""
+@click.option('-s','--separator', type=click.STRING, default="\t", help='The separator used in the input csv file.') # "|"
+@click.option('-q', '--quotechar', type=click.STRING, default='|', help='The quotechar used in the input csv file.') # '"'
 def phonetize_sentences(input_csv_file, output_csv_file, lang, basename_row, separator, quotechar):
     # Read the CSV file into a DataFrame
     df = pd.read_csv(input_csv_file, sep=separator, quotechar=quotechar)
@@ -39,13 +39,11 @@ def phonetize_sentences(input_csv_file, output_csv_file, lang, basename_row, sep
 
     # Match each line of the CSV with the associated line in the WAV list with tqdm progress bar
     for _, row in tqdm(df.iterrows(), total=len(df)):
-        # Language        Basename        Transcript -> header
-        # clip_id|text_aligned|clips_with_full_path|text_phonetized
         if lang: 
             language = lang
         else:
             language = get_lang_code(row["Language"])
-        basename = row[basename_row"Basename"]
+        basename = row[basename_row]
         transcript = row["Transcript"].strip()
 
         ipa_string = ""
@@ -67,7 +65,6 @@ def phonetize_sentences(input_csv_file, output_csv_file, lang, basename_row, sep
             ipa_string = backend_it.phonemize([transcript])[0]
         else:
             exit(f"Got an unexpected language code: {language}")
-        #print(f"Text phonetized in {row['Language']} : {ipa_string}")
 
         if len(ipa_string) <= 0:
             print(f"That does not seem normal {transcript=} |||||| {ipa_string=}")

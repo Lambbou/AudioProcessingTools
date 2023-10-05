@@ -2,10 +2,10 @@ import os
 import csv
 from glob import glob
 from tqdm import tqdm
-from moviepy.editor import VideoFileClip
+from pydub import AudioSegment
 
 from wvmos import get_wvmos
-model = get_wvmos(cuda=True)
+model = get_wvmos(cuda=True) # Update if necessary
 
 import click
 import os
@@ -13,13 +13,17 @@ import os
 def export_dict_to_csv(dictionary, csv_path):
     with open(csv_path, 'w') as ofile:
         writer = csv.writer(ofile, delimiter='\t')
+        
+        # Header
+        writer.writerow(["Path", "Duration", "MOS"])
+        
         for key, value in dictionary.items():
-            writer.writerow([key, value])
+            writer.writerow([key, value[0], value[1]])
 
 def get_audio_duration(path:str) -> int:
     # returns the duration of an audio file in ms
-    audio = VideoFileClip(path)
-    return int(audio.duration * 1000)
+    audio = AudioSegment.from_file(path)
+    return len(audio) # returns ms - use audio.duration_seconds to get the duration in seconds
 
 @click.command()
 @click.argument('input_path', type=click.Path(exists=True, dir_okay=True))

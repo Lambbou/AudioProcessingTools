@@ -20,7 +20,7 @@ def get_lang_code(text:str) -> str:
 @click.option('-t', '--transcript-row', type=click.STRING, default="Transcript", help='The name (in the header) of the row corresponding to the text transcript of the wav file speech content.') # ""
 @click.option('-s','--separator', type=click.STRING, default="\t", help='The separator used in the input csv file.') # "|"
 @click.option('-q', '--quotechar', type=click.STRING, default='|', help='The quotechar used in the input csv file.') # '"'
-def phonetize_sentences(input_csv_file, output_csv_file, lang, basename_row, separator, quotechar):
+def phonetize_sentences(input_csv_file, output_csv_file, lang, basename_row, transcript_row, separator, quotechar):
     # Read the CSV file into a DataFrame
     df = pd.read_csv(input_csv_file, sep=separator, quotechar=quotechar)
 
@@ -44,7 +44,7 @@ def phonetize_sentences(input_csv_file, output_csv_file, lang, basename_row, sep
         else:
             language = get_lang_code(row["Language"])
         basename = row[basename_row]
-        transcript = row["Transcript"].strip()
+        transcript = row[transcript_row].strip()
 
         ipa_string = ""
         if language == "en-us":

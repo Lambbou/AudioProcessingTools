@@ -16,24 +16,24 @@ class NegativeNumberParamType(click.ParamType):
         except ValueError:
             self.fail(f'{value} is not a valid number. Values passed in dB LUFS should be, well... numerical values.', param, ctx)
 
-def trim_audio_file(input_wav:str, output_wav:str):
+def trim_audio_file(input_wav:str, output_wav:str, threshold:int):
     audio = AudioSegment.from_wav(input_wav)
 
-    silence_threshold = -40  # Adjust as needed
-
-    audio_segments = split_on_silence(audio, silence_thresh=silence_threshold)
+    audio_segments = split_on_silence(audio, silence_thresh=threshold)
 
     trimmed_audio = AudioSegment.empty()
     for segment in audio_segments:
         trimmed_audio += segment
-
-    trimmed_audio = AudioSegment.silent(duration=150) + trimmed_audio + AudioSegment.silent(duration=150)
+        
+    if len(audio) < len(trimmed_audio):
+        # If data was trimmed, we add small 50ms silences before and after the signal 
+        trimmed_audio = AudioSegment.silent(duration=50) + trimmed_audio + AudioSegment.silent(duration=50)
 
     trimmed_audio.export(output_wav, format="wav")
     
     return len(audio), len(trimmed_audio)
 
-def trim_and_replicate(src_dir, dst_dir):
+def trim_and_replicate(src_dir, dst_dir, threshold:int):
     try:
         # Recursively create the same directory structure in the target directory
         for root, _, files in os.walk(src_dir):
@@ -45,7 +45,7 @@ def trim_and_replicate(src_dir, dst_dir):
                 # Create the target directory if it doesn't exist
                 os.makedirs(os.path.dirname(dst_file_path), exist_ok=True)
 
-                lenght, length_trimmed = trim_audio_file(src_file_path, dst_file_path)
+                lenght, length_trimmed = trim_audio_file(src_file_path, dst_file_path, threshold)
 
                 # Create a corresponding empty .txt file
                 txt_file_path = os.path.splitext(dst_file_path)[0] + ".txt"
@@ -63,9 +63,9 @@ def trim_and_replicate(src_dir, dst_dir):
 @click.command()
 @click.argument('src_directory', type=click.Path(exists=True))
 @click.argument('dst_directory', type=click.Path())
-@click.option('--db', type=NegativeNumberParamType(), default=-40, help='The desired loudness in dB LUFS (Loudness Units Full Scale).')
-def trim_and_replicate_structure(src_directory, dst_directory):
-    trim_and_replicate(src_directory, dst_directory)
+@click.option('--db', type=NegativeNumberParamType(), default=-40, help='The desired loudness threshold in dB LUFS (Loudness Units Full Scale) to identify silent areas.')
+def trim_and_replicate_structure(src_directory, dst_directory, db):
+    trim_and_replicate(src_directory, dst_directory, db)
 
 if __name__ == '__main__':
     trim_and_replicate_structure()

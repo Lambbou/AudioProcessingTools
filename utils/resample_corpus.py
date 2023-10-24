@@ -8,6 +8,8 @@ def resample_audio(src_dir:str, dst_dir:str, target_sr:int):
         # Recursively create the same directory structure in the target directory
         for root, _, files in os.walk(src_dir):
             for file in files:
+                if not file.endswith(".wav"):
+                    continue
                 src_file_path = os.path.join(root, file)
                 relative_path = os.path.relpath(src_file_path, src_dir)
                 dst_file_path = os.path.join(dst_dir, relative_path)

@@ -15,7 +15,7 @@ class NegativeNumberParamType(click.ParamType):
         except ValueError:
             self.fail(f'{value} is not a valid number. Values passed in dB LUFS should be, well... numerical values.', param, ctx)
 
-def normalize_audio(src_dir:str, dst_dir:str, target_loudness:int):
+def process_directory_for_normalization(src_dir:str, dst_dir:str, target_loudness:float):
     try:
         # Recursively create the same directory structure in the target directory
         for root, _, files in os.walk(src_dir):
@@ -29,7 +29,7 @@ def normalize_audio(src_dir:str, dst_dir:str, target_loudness:int):
                 # Create the target directory if it doesn't exist
                 os.makedirs(os.path.dirname(dst_file_path), exist_ok=True)
 
-                # Load the audio file and normalize to -23dB LUFS
+                # Load the audio file and normalize to target_loudness LUFS
                 audio = AudioSegment.from_file(src_file_path)
                 loudness = audio.dBFS
                 target_lufs = target_loudness  # Target LUFS level
@@ -39,7 +39,7 @@ def normalize_audio(src_dir:str, dst_dir:str, target_loudness:int):
                     gain = target_lufs - loudness
                     audio = audio + gain  # Apply the gain to normalize
                 else: 
-                    print(f"WARNING ! Fould a strange loudness figure ({loudness}) or current loudness == target.")
+                    print(f"WARNING ! Found a strange loudness figure ({loudness}) or current loudness == target.")
 
                 # Export the normalized audio to the target directory
                 audio.export(dst_file_path, format="wav")
@@ -48,14 +48,3 @@ def normalize_audio(src_dir:str, dst_dir:str, target_loudness:int):
         print("WARNING ! Although the directory structure was copied, ONLY THE WAV FILES were copied.")
     except Exception as e:
         print(f"Error: {str(e)}")
-
-@click.command()
-@click.argument('src_directory', type=click.Path(exists=True))
-@click.argument('dst_directory', type=click.Path())
-@click.option('--db', type=NegativeNumberParamType(), default=-23, help='The desired loudness in dB LUFS (Loudness Units Full Scale).')
-def normalize_and_replicate(src_directory, dst_directory, db):
-    normalize_audio(src_directory, dst_directory, db)
-
-if __name__ == '__main__':
-    normalize_and_replicate()
-

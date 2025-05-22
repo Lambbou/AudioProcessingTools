@@ -21,8 +21,8 @@ setup(
     # Here, it includes the main 'audioprocessing' package and any sub-packages.
     packages=find_packages(include=['audioprocessing', 'audioprocessing.*']),
     
-    author='AudioProcessingTools Contributor', # Placeholder for author's name.
-    author_email='user@example.com',          # Placeholder for author's email.
+    author='David Guennec',
+    author_email='not@available.com',
     description='A library for audio processing tasks related to ML dataset preparation.', # Short description.
     
     # long_description is typically read from README.md to provide a detailed description on PyPI.

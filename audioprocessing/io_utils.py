@@ -1,34 +1,114 @@
+"""Input/output utility functions for the audioprocessing library.
+
+This module provides common helper functions used across the audioprocessing
+library, particularly for tasks related to file system operations (like ensuring
+directory existence, copying files based on CSV data) and CSV file manipulation
+(like exporting dictionaries to CSV, joining CSV files). It also includes
+audio-specific I/O, such as getting audio duration.
+"""
 import csv
 from pydub import AudioSegment
+from pydub.exceptions import CouldntDecodeError # For documenting exceptions
 
-def get_audio_duration(path:str) -> int:
-    # returns the duration of an audio file in ms
+def get_audio_duration(path: str) -> int:
+    """Gets the duration of an audio file in milliseconds.
+
+    Args:
+        path (str): The path to the audio file.
+
+    Returns:
+        int: The duration of the audio file in milliseconds.
+
+    Raises:
+        FileNotFoundError: If the audio file specified by `path` does not exist
+                           (raised by `AudioSegment.from_file`).
+        CouldntDecodeError: If the audio file cannot be decoded by pydub
+                            (e.g., unsupported format, corrupted file).
+    """
+    # pydub's from_file can raise FileNotFoundError or CouldntDecodeError
     audio = AudioSegment.from_file(path)
-    return len(audio) # returns ms - use audio.duration_seconds to get the duration in seconds
+    return len(audio) # len(AudioSegment) returns duration in milliseconds.
 
-def export_dict_to_csv(dictionary, csv_path):
-    # Exports a dictionary to a CSV file.
-    # The current header is specific to similarity/MOS tasks.
-    # Consider making headers an argument for more generic use.
-    with open(csv_path, 'w') as ofile:
-        writer = csv.writer(ofile, delimiter='\t')
+def export_dict_to_csv(dictionary: dict, csv_path: str, headers: list[str] = None):
+    """Exports a dictionary to a CSV file with a specific header.
+
+    The dictionary is expected to have keys representing the first column's data
+    (e.g., file paths), and values as lists or tuples containing the data for
+    the subsequent columns. The number of elements in these lists/tuples should
+    match the number of headers provided (excluding the first implicit header 
+    if `headers` corresponds only to the value part).
+
+    Example:
+        results = {"file1.wav": [6000, 4.5], "file2.wav": [5000, 4.2]}
+        export_dict_to_csv(results, "output.csv", headers=["SourcePath", "DurationMS", "MOSScore"])
+        This would create a CSV with "SourcePath" as the first column header.
+        Alternatively, if headers are for the values only:
+        export_dict_to_csv(results, "output.csv", headers=["DurationMS", "MOSScore"])
+        The function will prepend a default "Key" or "Path" header for the keys.
+        The original script used a fixed header: ["Path", "Duration", "MOS"]. This
+        version is more flexible. If `headers` is None, it defaults to the original
+        fixed header.
+
+    Args:
+        dictionary (dict): The dictionary to export. Keys are first column items,
+                           values are lists/tuples for other columns.
+        csv_path (str): The path to the CSV file to create.
+        headers (list[str], optional): A list of strings for the CSV header.
+            If None, defaults to `["Path", "Duration", "MOS"]`. The first header
+            is for the dictionary keys.
+    """
+    if headers is None:
+        # Default to the original fixed header if none provided
+        final_headers = ["Path", "Duration", "MOS"]
+    else:
+        # If headers are provided, assume the first one is for the keys,
+        # or if it's meant for values, ensure key header is present.
+        # This logic can be adjusted based on how `headers` is intended to be used.
+        # For now, let's assume `headers` is the full list including the key's header.
+        final_headers = headers
+
+    with open(csv_path, 'w', newline='', encoding='utf-8') as ofile:
+        writer = csv.writer(ofile, delimiter='\t', quotechar='|') # Original delimiter/quotechar
         
-        # Header
-        writer.writerow(["Path", "Duration", "MOS"]) # Or similarity score
+        writer.writerow(final_headers)
         
-        for key, value in dictionary.items():
-            writer.writerow([key, value[0], value[1]])
+        for key, value_list in dictionary.items():
+            # Ensure value_list is indeed a list or tuple to be unpacked
+            if not isinstance(value_list, (list, tuple)):
+                # If it's a single value, wrap it in a list
+                # This might happen if dict stores {key: score} instead of {key: [val1, val2]}
+                value_list = [value_list]
+            
+            # The number of values in value_list should match final_headers length - 1
+            if len(value_list) != len(final_headers) -1:
+                print(f"Warning: Data for key '{key}' (values: {value_list}) "
+                      f"does not match header count (expected {len(final_headers)-1} values). "
+                      f"Row will be written as is, possibly misaligned.")
+            writer.writerow([key] + list(value_list))
 
 import os
 import shutil
 
-def _ensure_dir_exists(directory_path: str):
-    """Helper function to ensure a directory exists, creating it if necessary."""
-    if not os.path.exists(directory_path):
-        os.makedirs(directory_path)
-    elif not os.path.isdir(directory_path):
-        raise NotADirectoryError(f"Path '{directory_path}' exists but is not a directory.")
+def _ensure_dir_exists(directory_path: str) -> None:
+    """Ensures a directory exists at the specified path.
 
+    If the directory does not exist, it is created. If a file exists at the path,
+    or if the path exists but is not a directory, an error is raised.
+
+    Args:
+        directory_path (str): The path to the directory to check/create.
+
+    Raises:
+        NotADirectoryError: If `directory_path` exists but is not a directory.
+        OSError: If `os.makedirs` fails for reasons other than the path existing
+                 (e.g., permission issues).
+    """
+    if not os.path.exists(directory_path):
+        os.makedirs(directory_path) # Can raise OSError for permission issues etc.
+    elif not os.path.isdir(directory_path):
+        # This specific check helps differentiate between non-existence and wrong type.
+        raise NotADirectoryError(f"Path '{directory_path}' exists but is not a directory.")
+    # If it exists and is a directory, do nothing.
 
 def copy_files_from_csv_column(
     csv_filepath: str, 
@@ -36,18 +116,27 @@ def copy_files_from_csv_column(
     destination_dir: str, 
     csv_delimiter: str = '\t', 
     csv_quotechar: str = '|'
-    ):
-    """
-    Reads a CSV file, extracts file paths from a specified column, 
-    and copies these files to a destination directory.
-    The base name of the source file is used as the name of the copied file in the destination directory.
+    ) -> bool:
+    """Copies files listed in a CSV column to a destination directory.
+
+    Reads a CSV file, extracts file paths from a specified column, and copies
+    these files to a destination directory. The base name of the source file is
+    used as the name of the copied file in the destination directory. 
+    Prints errors for files not found or if copying fails.
 
     Args:
-        csv_filepath: Path to the CSV file.
-        file_path_column_name: Name of the column containing the file paths.
-        destination_dir: Directory where files will be copied.
-        csv_delimiter: Delimiter used in the CSV file.
-        csv_quotechar: Quote character used in the CSV file.
+        csv_filepath (str): Path to the CSV file.
+        file_path_column_name (str): Name of the column in the CSV that contains
+            the file paths to be copied.
+        destination_dir (str): The directory where files will be copied.
+        csv_delimiter (str): The delimiter used in the CSV file. Defaults to tab.
+        csv_quotechar (str): The quote character used in the CSV file.
+            Defaults to '|'.
+
+    Returns:
+        bool: True if the CSV was processed (even if some files failed to copy),
+              False if the CSV file itself could not be read or the specified
+              `file_path_column_name` does not exist in the CSV header.
     """
     copied_count = 0
     skipped_count = 0
@@ -97,11 +186,26 @@ def copy_files_from_csv_column(
 
 
 def _get_column_index(header: list[str], column_name: str, csv_path: str) -> int:
-    """Helper to find column index or raise error."""
+    """Gets the index of a column name within a CSV header.
+
+    Internal helper function.
+
+    Args:
+        header (list[str]): The list of strings representing the CSV header.
+        column_name (str): The name of the column to find.
+        csv_path (str): The path to the CSV file (used for error reporting).
+
+    Returns:
+        int: The index of `column_name` in the `header`.
+
+    Raises:
+        ValueError: If `column_name` is not found in the `header`.
+    """
     try:
         return header.index(column_name)
     except ValueError:
-        raise ValueError(f"Error: Key column '{column_name}' not found in header of '{csv_path}'. Header: {header}")
+        # Raise a new ValueError with a more informative message
+        raise ValueError(f"Error: Column '{column_name}' not found in header of '{csv_path}'. Header: {header}")
 
 
 def join_csv_files_on_key(
@@ -111,19 +215,32 @@ def join_csv_files_on_key(
     output_csv_path: str, 
     csv_delimiter: str = '\t', 
     csv_quotechar: str = '|'
-    ):
-    """
-    Merges two CSV files based on a common key column (SQL-like JOIN).
-    The header of the output CSV will be header_csv1 + header_csv2 (excluding the key column from csv2).
-    Rows are joined where the key_column values match.
+    ) -> bool:
+    """Joins two CSV files based on a common key column (SQL-like inner join).
+
+    This function reads two CSV files, identifies a common `key_column` in each,
+    and creates a new CSV file containing rows where the values in the `key_column`
+    match. The output CSV's header will be the header of the first CSV file
+    followed by the header of the second CSV file (excluding the `key_column` from
+    the second file to avoid duplication). Only rows with matching keys in both
+    files are included in the output.
 
     Args:
-        csv1_path: Path to the first CSV file.
-        csv2_path: Path to the second CSV file.
-        key_column: The name of the common column to join on.
-        output_csv_path: Path to save the merged CSV file.
-        csv_delimiter: Delimiter for input and output CSVs.
-        csv_quotechar: Quote character for input and output CSVs.
+        csv1_path (str): Path to the first CSV file (e.g., "left table").
+        csv2_path (str): Path to the second CSV file (e.g., "right table").
+        key_column (str): The name of the common column to join on. This column
+                          must exist in both CSV files.
+        output_csv_path (str): Path where the joined CSV data will be saved.
+        csv_delimiter (str): The delimiter used in both input and output CSV files.
+                             Defaults to tab.
+        csv_quotechar (str): The quote character used in both input and output CSV
+                             files. Defaults to '|'.
+
+    Returns:
+        bool: True if the join operation was successful (or partially successful,
+              meaning files were read and output was written, even if no rows
+              matched). False if a critical error occurred, such as a file not
+              being found or the key column being absent from a header.
     """
     try:
         with open(csv1_path, "r", newline='', encoding='utf-8') as f1:

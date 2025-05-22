@@ -1,10 +1,21 @@
+"""Audio silence detection and trimming utilities.
+
+This module provides functionalities for detecting and removing silence from
+audio files using the pydub library. It includes tools to process individual
+audio files or entire directories of audio files, saving the trimmed versions
+and optionally generating reports about the trimming process.
+"""
 import os
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
+from pydub.exceptions import CouldntDecodeError # For documenting exceptions
 from tqdm import tqdm
 
-def _ensure_dir(directory_path):
-    """Ensure the directory exists."""
+def _ensure_dir(directory_path: str) -> None:
+    """Ensure the directory exists, creating it if necessary.
+    
+    Internal helper function.
+    """
     os.makedirs(directory_path, exist_ok=True)
 
 def trim_audio_file_pydub(
@@ -12,25 +23,44 @@ def trim_audio_file_pydub(
     output_path: str, 
     silence_thresh_dbfs: int, 
     min_silence_len_ms: int = 1000, 
-    padding_ms: int = 50, # Corresponds to keep_silence in split_on_silence if used differently
+    padding_ms: int = 50, 
     audio_format: str = "wav"
 ) -> tuple[int, int] | None:
-    """
-    Trims silence from a single audio file using pydub and saves it.
+    """Trims silence from an audio file using pydub and saves the result.
+
+    This function identifies non-silent segments in an audio file based on the
+    provided silence threshold and minimum silence length. It then concatenates
+    these non-silent segments, optionally adding padding around them (via
+    `keep_silence` in `pydub.silence.split_on_silence`), and exports the
+    result to a new audio file.
 
     Args:
-        input_path: Path to the input audio file.
-        output_path: Path to save the trimmed audio file.
-        silence_thresh_dbfs: Silence threshold in dBFS.
-        min_silence_len_ms: Minimum length of silence (in ms) to be considered for splitting.
-        padding_ms: Amount of silence (in ms) to leave at the beginning and end if trimming occurs.
-                    The original script added 50ms unconditionally if any trimming happened.
-                    pydub's split_on_silence has `keep_silence` which can be used for padding around chunks.
-                    Here, we'll replicate the original script's behavior of adding padding to the final concatenated audio if it was trimmed.
-        audio_format: The format for the output audio file.
+        input_path (str): Path to the input audio file.
+        output_path (str): Path to save the trimmed audio file.
+        silence_thresh_dbfs (int): The threshold (in dBFS) below which audio is
+            considered silent. For example, -40 means parts of audio quieter
+            than -40 dBFS are considered silence.
+        min_silence_len_ms (int): The minimum duration (in milliseconds) that
+            a segment of audio must be silent for it to be considered a
+            "silence" break.
+        padding_ms (int): Amount of silence (in milliseconds) to keep at the
+            beginning and end of each detected non-silent chunk. This is passed
+            to the `keep_silence` parameter of `pydub.silence.split_on_silence`.
+            If set to 0, no padding is added around the chunks.
+        audio_format (str): The format for the output audio file (e.g., "wav",
+            "mp3"). Defaults to "wav".
 
     Returns:
-        A tuple (original_length_ms, trimmed_length_ms) if successful, else None.
+        tuple[int, int] | None: A tuple containing the original duration and
+            the trimmed duration of the audio in milliseconds, i.e.,
+            `(original_length_ms, trimmed_length_ms)`, if successful.
+            Returns `None` if an error occurs during processing.
+
+    Raises:
+        FileNotFoundError: If `input_path` does not exist (from `AudioSegment.from_file`).
+        CouldntDecodeError: If pydub cannot decode the input file (e.g.,
+                            unsupported format or corrupted file).
+        OSError: If there are issues writing the output file (e.g., permission errors).
     """
     try:
         audio = AudioSegment.from_file(input_path)
@@ -83,10 +113,44 @@ def process_corpus_for_silence_trimming(
     padding_ms: int = 50,
     create_report_files: bool = True,
     audio_format: str = "wav"
-):
-    """
-    Recursively walks src_dir, trims silence from .wav files,
-    saves them to dst_dir, and optionally creates report files.
+) -> None:
+    """Processes a directory of audio files to trim silence from each file.
+
+    Recursively walks through the `src_dir`, finds all audio files matching the
+    specified `audio_format` (case-insensitive), and applies silence trimming
+    using `trim_audio_file_pydub`. Trimmed files are saved to a corresponding
+    path in `dst_dir`, maintaining the original directory structure.
+    Optionally, a `.txt` report file can be created for each processed audio
+    file, detailing the original and trimmed durations.
+
+    Args:
+        src_dir (str): The path to the source directory containing audio files.
+        dst_dir (str): The path to the destination directory where trimmed audio
+                       files (and reports) will be saved. This directory will be
+                       created if it does not exist.
+        silence_thresh_dbfs (int): The silence threshold in dBFS passed to
+                                   `trim_audio_file_pydub`.
+        min_silence_len_ms (int): The minimum silence length in milliseconds
+                                  passed to `trim_audio_file_pydub`.
+        padding_ms (int): The padding in milliseconds to keep around non-silent
+                          segments, passed to `trim_audio_file_pydub`.
+        create_report_files (bool): If True, a `.txt` file is created for each
+                                    processed audio file, containing its original
+                                    duration, trimmed duration, and the amount of
+                                    silence removed. Defaults to True.
+        audio_format (str): The file extension (without the dot) of audio files
+                            to process (e.g., "wav", "mp3"). Defaults to "wav".
+
+    Returns:
+        None. Results are written to `dst_dir`, and progress is printed to the console.
+
+    Raises:
+        FileNotFoundError: If `src_dir` does not exist.
+        NotADirectoryError: If `src_dir` is not a directory.
+        OSError: For issues related to directory creation or file I/O in `dst_dir`.
+                 Individual file processing errors (e.g., `CouldntDecodeError` from
+                 `trim_audio_file_pydub`) are caught, reported, and skipped, allowing
+                 the batch process to continue.
     """
     print(f"Trimming silence from '.{audio_format}' files in '{src_dir}' to '{dst_dir}'.")
     print(f"Parameters: Threshold={silence_thresh_dbfs}dBFS, Min Silence={min_silence_len_ms}ms, Padding={padding_ms}ms")
